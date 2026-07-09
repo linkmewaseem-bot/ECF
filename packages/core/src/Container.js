@@ -1,108 +1,69 @@
 import ContainerError from "./errors/ContainerError.js";
-
+import Binding from "./Binding.js";
+import Resolver from "./Resolver.js";
 export default class Container {
+    constructor() {
 
-    #bindings = new Map();
-
-    #singletons = new Map();
-
-    #instances = new Map();
-
-    /**
-     * Register a transient service.
-     */
-    bind(name, factory) {
-
-        this.#bindings.set(name, factory);
-
-        return this;
+        this.bindings = new Map();
+        this.instances = new Map();
+        this.resolver = new Resolver();
+    }
+    bind(name, factory){
+        this.validateBinding(name, factory);
+        const binding = new Binding(factory, false);
+        this.bindings.set(name, binding);
     }
 
-    /**
-     * Register a singleton service.
-     */
-    singleton(name, factory) {
-
-        this.#singletons.set(name, factory);
-
-        return this;
+    singleton(name, factory){
+        this.validateBinding(name, factory);
+        const binding = new Binding(factory, true);
+        this.bindings.set(name, binding);
+    }
+    has(name){
+        this.validateName(name);
+        return this.bindings.has(name);
     }
 
-    /**
-     * Register an existing object instance.
-     */
-    instance(name, value) {
-
-        this.#instances.set(name, value);
-
-        return this;
-    }
-
-    /**
-     * Resolve a service.
-     */
-    make(name) {
-
-        if (this.#instances.has(name)) {
-            return this.#instances.get(name);
+    make(name){
+        this.validateName(name);
+        if (!this.bindings.has(name)) {
+            throw new ContainerError(`Binding with name "${name}" does not exist.`);
         }
-
-        if (this.#singletons.has(name)) {
-
-            const object = this.#singletons.get(name)(this);
-
-            this.#instances.set(name, object);
-
-            return object;
+        const binding = this.bindings.get(name);
+        if (binding.singleton) {
+            if (!this.instances.has(name)) {
+                this.instances.set(name, binding.factory());
+            }
+            return this.instances.get(name);
         }
+        return this.resolver.resolve(binding);
+    }
 
-        if (this.#bindings.has(name)) {
-            return this.#bindings.get(name)(this);
+    forget(name){
+        this.validateName(name);
+        if (!this.bindings.has(name)) {
+            throw new ContainerError(`Binding with name "${name}" does not exist.`);
         }
-
-        throw new ContainerError(
-            `Service [${name}] is not registered.`
-        );
+        this.bindings.delete(name);
+        this.instances.delete(name);
     }
 
-    /**
-     * Check service existence.
-     */
-    has(name) {
-
-        return (
-            this.#bindings.has(name) ||
-            this.#singletons.has(name) ||
-            this.#instances.has(name)
-        );
+    flush(){
+        this.bindings.clear();
+        this.instances.clear();
     }
 
-    /**
-     * Remove a service.
-     */
-    remove(name) {
-
-        this.#bindings.delete(name);
-
-        this.#singletons.delete(name);
-
-        this.#instances.delete(name);
-
-        return this;
+    validateName(name) {
+        if (typeof name !== "string" || name.trim() === "") {
+            throw new ContainerError("Binding name must be a non-empty string.");
+        }
     }
 
-    /**
-     * Clear container.
-     */
-    flush() {
-
-        this.#bindings.clear();
-
-        this.#singletons.clear();
-
-        this.#instances.clear();
-
-        return this;
+    validateBinding(name, factory){
+        this.validateName(name);
+        if(typeof factory !== "function"){
+            throw new ContainerError(`Factory for binding "${name}" must be a function.`);
+        }
+    }
     }
 
-}

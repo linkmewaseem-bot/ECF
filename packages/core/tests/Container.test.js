@@ -1,119 +1,102 @@
 import { describe } from "node:test";
-
 import test from "node:test";
 import assert from "node:assert/strict";
-import { Container } from "../src/index.js";
-import ContainerError from "../src/errors/ContainerError.js";
-describe("Container", () => {
+import { Container, ContainerError } from "../src/index.js";
 
+describe("Container - make()", () => {
 
-test("Container can be created", () => {
+    test("make should throw an error for non-existent binding", () => {
+        const container = new Container();
+        assert.throws(() => {
+            container.make("nonExistent");
+        }, ContainerError);
+    });
 
-    const container = new Container();
-    container.bind("uuid", () => ({}));
-    const one = container.make("uuid");
-    
-    const two = container.make("uuid");
-    container.singleton("config", () => ({}));
-    const a = container.make("config");
-    
-    const s = container.make("config");
-    assert.ok(container);
-    assert.notStrictEqual(one, two);
-    assert.strictEqual(a, s);
-    
+    test("make should throw an error for invalid name", () => {
+        const container = new Container();
+        assert.throws(() => {
+            container.make("");
+        }, ContainerError);
 
-});
-test("bind returns a new instance every time", () => {
+        assert.throws(() => {
+            container.make(123);
+        }, ContainerError);
+    });
 
-    const container = new Container();
+    test("make should resolve a regular (non-singleton) binding", () => {
+        const container = new Container();
+        container.bind("logger", () => ({ log: () => "logged" }));
 
-    container.bind("user", () => ({}));
+        const instance = container.make("logger");
+        assert.equal(typeof instance.log, "function");
+        assert.equal(instance.log(), "logged");
+    });
 
-    const first = container.make("user");
-    const second = container.make("user");
+    test("make should return a NEW instance each time for non-singleton bindings", () => {
+        const container = new Container();
+        let counter = 0;
+        container.bind("counter", () => ({ id: ++counter }));
 
-    assert.notStrictEqual(first, second);
+        const first = container.make("counter");
+        const second = container.make("counter");
 
-});
-test("singleton returns the same instance", () => {
+        assert.equal(first.id, 1);
+        assert.equal(second.id, 2);
+        assert.notEqual(first, second);
+    });
 
-    const container = new Container();
+    test("make should resolve a singleton binding", () => {
+        const container = new Container();
+        container.singleton("config", () => ({ env: "production" }));
 
-    container.singleton("config", () => ({}));
+        const instance = container.make("config");
+        assert.equal(instance.env, "production");
+    });
 
-    const first = container.make("config");
-    const second = container.make("config");
+    test("make should return the SAME instance every time for singleton bindings", () => {
+        const container = new Container();
+        let counter = 0;
+        container.singleton("counter", () => ({ id: ++counter }));
 
-    assert.strictEqual(first, second);
+        const first = container.make("counter");
+        const second = container.make("counter");
 
-});
-test("instance returns the registered object", () => {
+        assert.equal(first.id, 1);
+        assert.equal(second.id, 1);
+        assert.strictEqual(first, second);
+    });
 
-    const container = new Container();
+    test("make should not share instances between different singleton bindings", () => {
+        const container = new Container();
+        container.singleton("a", () => ({ value: "A" }));
+        container.singleton("b", () => ({ value: "B" }));
 
-    const logger = {};
+        const a = container.make("a");
+        const b = container.make("b");
 
-    container.instance("logger", logger);
+        assert.equal(a.value, "A");
+        assert.equal(b.value, "B");
+        assert.notEqual(a, b);
+    });
 
-    assert.strictEqual(
-        container.make("logger"),
-        logger
-    );
+    test("make should throw after the binding has been forgotten", () => {
+        const container = new Container();
+        container.bind("logger", () => ({ log: () => {} }));
+        container.forget("logger");
 
-});
-test("has returns true when service exists", () => {
+        assert.throws(() => {
+            container.make("logger");
+        }, ContainerError);
+    });
 
-    const container = new Container();
+    test("make should throw after flush()", () => {
+        const container = new Container();
+        container.singleton("config", () => ({ env: "dev" }));
+        container.flush();
 
-    container.instance("config", {});
+        assert.throws(() => {
+            container.make("config");
+        }, ContainerError);
+    });
 
-    assert.equal(
-        container.has("config"),
-        true
-    );
-
-});
-test("remove deletes a service", () => {
-
-    const container = new Container();
-
-    container.instance("cache", {});
-
-    container.remove("cache");
-
-    assert.equal(
-        container.has("cache"),
-        false
-    );
-
-});
-test("flush clears all services", () => {
-
-    const container = new Container();
-
-    container.instance("a", {});
-    container.instance("b", {});
-    container.instance("c", {});
-
-    container.flush();
-
-    assert.equal(container.has("a"), false);
-    assert.equal(container.has("b"), false);
-    assert.equal(container.has("c"), false);
-
-});
-
-
-test("throws ContainerError for unknown service", () => {
-
-    const container = new Container();
-
-    assert.throws(() => {
-
-        container.make("payment");
-
-    }, ContainerError);
-
-});
 });
