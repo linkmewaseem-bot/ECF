@@ -99,4 +99,43 @@ describe("Container - make()", () => {
         }, ContainerError);
     });
 
+    test("ECF", () => {
+        const container = new Container();
+        container.bind("config", () => {
+    return { app: "ECF" };
+});
+
+container.bind("service", (container) => {
+    return {
+        config: container.make("config")
+    };
+});
+
+const service = container.make("service");
+
+console.log(service.config.app);
+    })
+
+    test("should detect circular dependency", () => {
+
+    const container = new Container();
+
+    container.bind("A", (container) => {
+        return {
+            b: container.make("B")
+        };
+    });
+
+    container.bind("B", (container) => {
+        return {
+            a: container.make("A")
+        };
+    });
+
+    assert.throws(() => {
+        container.make("A");
+    });
+
+});
+
 });

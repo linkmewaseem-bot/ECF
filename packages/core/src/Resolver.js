@@ -1,7 +1,7 @@
 export default class Resolver {
 
-    resolve(binding) {
-        return binding.factory();
+    resolve(binding, container) {
+        return binding.factory(container);
     }
 
 }
