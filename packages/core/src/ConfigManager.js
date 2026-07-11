@@ -1,5 +1,5 @@
 import ConfigError from "./errors/ConfigError.js";
-export default class Config {
+export default class ConfigManager {
     constructor() {
         this.items = {};
     }
