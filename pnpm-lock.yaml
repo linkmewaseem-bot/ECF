@@ -9,3 +9,9 @@ importers:
   .: {}
 
   packages/core: {}
+
+  packages/http:
+    dependencies:
+      '@ecf/core':
+        specifier: workspace:*
+        version: link:../core
