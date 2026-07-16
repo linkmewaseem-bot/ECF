@@ -3,9 +3,9 @@ import {ECFError} from '@ecf/core';
 /**
  * Error thrown when a pipeline-related error occurs.
  */
-export default class PipelineError extends ECFError {
+export default class HttpServerError extends ECFError {
     constructor(message) {
         super(message);
-         this.name = "PipelineError";
+         this.name = "HttpServerError";
     }
 }

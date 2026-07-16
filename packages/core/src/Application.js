@@ -1,4 +1,6 @@
-import {Container,ContainerError,ServiceProvider} from "./index.js";
+import Container from "./Container.js";
+import ContainerError from "./errors/ContainerError.js";
+import ServiceProvider from "./ServiceProvider.js";
 
 
 
@@ -32,7 +34,11 @@ export default class Application {
     flush(...args) {
         return this.container.flush(...args);
     }
-
+    listen(...args) {
+        const server = this.make("http.server");
+        server.listen(...args);
+        return this;
+    }
     // ---- Provider handling ----
     register(ProviderClass) {
         this.validateProvider(ProviderClass);

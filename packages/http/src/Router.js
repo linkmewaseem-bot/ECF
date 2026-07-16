@@ -1,5 +1,6 @@
 import RouteError from "./errors/RouteError.js";
 import DuplicateRouteError from "./errors/DuplicateRouteError.js";
+import RouteNotFoundError from "./errors/RouteNotFoundError.js";
 import Route from "./Route.js";
 
 const VALID_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
@@ -46,35 +47,24 @@ export default class Router {
         return this;
     }
 
-    match(method, path) {
+    match(request) {
+        this.validateRequest(request);
+
+        const method = request.method;
+        const path = request.path;
+
         this.validateMethod(method);
         this.validatePath(path);
 
-        const upperMethod = method.toUpperCase();
-        const candidates = this.routes.get(upperMethod);
+        const route = this.resolve(method, path);
 
-        if (!candidates || candidates.length === 0) {
-            return null;
+        if (!route.matched) {
+            throw new RouteNotFoundError(method, path);
         }
 
-        const segmentCount = this.countSegments(path);
+        request.attributes.set("params", route.params);
 
-        for (const route of candidates) {
-            if (route.segmentCount !== segmentCount) {
-                continue;
-            }
-
-            if (!path.startsWith(route.staticPrefix)) {
-                continue;
-            }
-
-            const params = route.match(path);
-            if (params !== null) {
-                return { route, params };
-            }
-        }
-
-        return null;
+        return route.route;
     }
 
     // ---- Registration engine (single source of truth) ----
@@ -93,6 +83,34 @@ export default class Router {
 
     // ---- Internal helpers ----
 
+    resolve(method, path) {
+        const upperMethod = method.toUpperCase();
+        const candidates = this.routes.get(upperMethod);
+
+        if (!candidates || candidates.length === 0) {
+            return { matched: false };
+        }
+
+        const segmentCount = this.countSegments(path);
+
+        for (const route of candidates) {
+            if (route.segmentCount !== segmentCount) {
+                continue;
+            }
+
+            if (!path.startsWith(route.staticPrefix)) {
+                continue;
+            }
+
+            const params = route.match(path);
+            if (params !== null) {
+                return { matched: true, route, params };
+            }
+        }
+
+        return { matched: false };
+    }
+
     countSegments(path) {
         return path.split("/").filter(Boolean).length;
     }
@@ -108,6 +126,18 @@ export default class Router {
     }
 
     // ---- Validation ----
+
+    validateRequest(request) {
+        if (
+            !request ||
+            typeof request.method !== "string" ||
+            typeof request.path !== "string" ||
+            !request.attributes ||
+            typeof request.attributes.set !== "function"
+        ) {
+            throw new RouteError("Router.match() requires a valid Request object with method, path, and attributes.");
+        }
+    }
 
     validateMethod(method) {
         if (typeof method !== "string" || !VALID_METHODS.includes(method.toUpperCase())) {

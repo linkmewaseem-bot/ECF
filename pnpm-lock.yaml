@@ -8,7 +8,17 @@ importers:
 
   .: {}
 
-  packages/core: {}
+  apps/halo:
+    dependencies:
+      '@ecf/http':
+        specifier: workspace:*
+        version: link:../../packages/http
+
+  packages/core:
+    devDependencies:
+      '@ecf/http':
+        specifier: workspace:*
+        version: link:../http
 
   packages/http:
     dependencies:

@@ -4,6 +4,7 @@ import { Readable } from "node:stream";
 import Pipeline from "../src/Pipeline.js";
 import PipelineError from "../src/errors/PipelineError.js";
 import Request from "../src/Request.js";
+import Response from "../src/Response.js";
 
 // ---- Helpers ----
 
@@ -16,48 +17,69 @@ function makeFakeIncomingMessage({ method = "GET", url = "/", headers = {}, sock
     return stream;
 }
 
-function makeFakeBodyParserManager(returnValue = {}) {
-    return {
-        parse: async () => returnValue
+function makeFakeServerResponse() {
+    const calls = { headers: {}, body: null, ended: false };
+    const raw = {
+        headersSent: false,
+        statusCode: 200,
+        setHeader(name, value) { calls.headers[name.toLowerCase()] = value; },
+        getHeader(name) { return calls.headers[name.toLowerCase()]; },
+        removeHeader(name) { delete calls.headers[name.toLowerCase()]; },
+        end(body) {
+            calls.ended = true;
+            calls.body = body ?? null;
+            raw.headersSent = true;
+        }
     };
+    return { raw, calls };
+}
+
+function makeFakeBodyParserManager(returnValue = {}) {
+    return { parse: async () => returnValue };
 }
 
 function makeRequest(overrides = {}) {
-    return new Request(
-        makeFakeIncomingMessage(overrides),
-        makeFakeBodyParserManager()
-    );
+    return new Request(makeFakeIncomingMessage(overrides), makeFakeBodyParserManager());
+}
+
+function makeResponse() {
+    const { raw } = makeFakeServerResponse();
+    return new Response(raw);
 }
 
 // ---- Tests ----
 
 describe("Pipeline - send()", () => {
 
-    test("should accept a valid Request instance", () => {
+    test("should accept a valid Request and Response instance", () => {
         const pipeline = new Pipeline();
-        const request = makeRequest();
-
-        assert.doesNotThrow(() => pipeline.send(request));
+        assert.doesNotThrow(() => pipeline.send(makeRequest(), makeResponse()));
     });
 
     test("should return the pipeline instance for chaining", () => {
         const pipeline = new Pipeline();
-        const request = makeRequest();
-
-        const result = pipeline.send(request);
+        const result = pipeline.send(makeRequest(), makeResponse());
         assert.strictEqual(result, pipeline);
     });
 
-    test("should throw PipelineError for null", () => {
+    test("should throw PipelineError for null request", () => {
         const pipeline = new Pipeline();
-
-        assert.throws(() => pipeline.send(null), PipelineError);
+        assert.throws(() => pipeline.send(null, makeResponse()), PipelineError);
     });
 
-    test("should throw PipelineError for a plain object", () => {
+    test("should throw PipelineError for a plain object as request", () => {
         const pipeline = new Pipeline();
+        assert.throws(() => pipeline.send({}, makeResponse()), PipelineError);
+    });
 
-        assert.throws(() => pipeline.send({}), PipelineError);
+    test("should throw PipelineError for null response", () => {
+        const pipeline = new Pipeline();
+        assert.throws(() => pipeline.send(makeRequest(), null), PipelineError);
+    });
+
+    test("should throw PipelineError for a plain object as response", () => {
+        const pipeline = new Pipeline();
+        assert.throws(() => pipeline.send(makeRequest(), {}), PipelineError);
     });
 
 });
@@ -66,32 +88,27 @@ describe("Pipeline - through()", () => {
 
     test("should accept a valid middleware array", () => {
         const pipeline = new Pipeline();
-
         assert.doesNotThrow(() => pipeline.through([() => {}, () => {}]));
     });
 
     test("should return the pipeline instance for chaining", () => {
         const pipeline = new Pipeline();
-
         const result = pipeline.through([]);
         assert.strictEqual(result, pipeline);
     });
 
     test("should throw PipelineError for null", () => {
         const pipeline = new Pipeline();
-
         assert.throws(() => pipeline.through(null), PipelineError);
     });
 
     test("should throw PipelineError for a plain object", () => {
         const pipeline = new Pipeline();
-
         assert.throws(() => pipeline.through({}), PipelineError);
     });
 
     test("should throw PipelineError if any element is not a function", () => {
         const pipeline = new Pipeline();
-
         assert.throws(() => pipeline.through([() => {}, {}, () => {}]), PipelineError);
     });
 
@@ -101,21 +118,23 @@ describe("Pipeline - then()", () => {
 
     test("should throw PipelineError for null destination", () => {
         const pipeline = new Pipeline();
-        const request = makeRequest();
-
-        pipeline.send(request).through([]);
+        pipeline.send(makeRequest(), makeResponse()).through([]);
 
         assert.throws(() => pipeline.then(null), PipelineError);
     });
 
+    test("should throw PipelineError if send() was not called before then()", () => {
+        const pipeline = new Pipeline();
+        assert.throws(() => pipeline.then(() => {}), PipelineError);
+    });
+
     test("should execute the destination and return its result", () => {
         const pipeline = new Pipeline();
-        const request = makeRequest();
 
         const result = pipeline
-            .send(request)
+            .send(makeRequest(), makeResponse())
             .through([])
-            .then((req) => "destination-result");
+            .then((req, res) => "destination-result");
 
         assert.equal(result, "destination-result");
     });
@@ -126,93 +145,100 @@ describe("Pipeline - execution", () => {
 
     test("empty middleware array should call destination directly", () => {
         const pipeline = new Pipeline();
-        const request = makeRequest();
         let called = false;
 
         pipeline
-            .send(request)
+            .send(makeRequest(), makeResponse())
             .through([])
-            .then((req) => { called = true; });
+            .then((req, res) => { called = true; });
 
         assert.equal(called, true);
     });
 
     test("middleware execution order should be preserved", () => {
         const pipeline = new Pipeline();
-        const request = makeRequest();
         const order = [];
 
-        const m1 = (req, next) => { order.push(1); return next(); };
-        const m2 = (req, next) => { order.push(2); return next(); };
-        const m3 = (req, next) => { order.push(3); return next(); };
+        const m1 = (req, res, next) => { order.push(1); return next(); };
+        const m2 = (req, res, next) => { order.push(2); return next(); };
+        const m3 = (req, res, next) => { order.push(3); return next(); };
 
         pipeline
-            .send(request)
+            .send(makeRequest(), makeResponse())
             .through([m1, m2, m3])
-            .then((req) => { order.push("destination"); });
+            .then((req, res) => { order.push("destination"); });
 
         assert.deepEqual(order, [1, 2, 3, "destination"]);
     });
 
-    test("same Request instance should be passed to every middleware and destination", () => {
+    test("same Request and Response instance should be passed to every middleware and destination", () => {
         const pipeline = new Pipeline();
         const request = makeRequest();
-        const instances = [];
+        const response = makeResponse();
+        const reqInstances = [];
+        const resInstances = [];
 
-        const m1 = (req, next) => { instances.push(req); return next(); };
-        const m2 = (req, next) => { instances.push(req); return next(); };
+        const m1 = (req, res, next) => { reqInstances.push(req); resInstances.push(res); return next(); };
+        const m2 = (req, res, next) => { reqInstances.push(req); resInstances.push(res); return next(); };
 
         pipeline
-            .send(request)
+            .send(request, response)
             .through([m1, m2])
-            .then((req) => { instances.push(req); });
+            .then((req, res) => { reqInstances.push(req); resInstances.push(res); });
 
-        assert.equal(instances.length, 3);
-        assert.strictEqual(instances[0], request);
-        assert.strictEqual(instances[1], request);
-        assert.strictEqual(instances[2], request);
+        assert.equal(reqInstances.length, 3);
+        assert.ok(reqInstances.every((r) => r === request));
+        assert.ok(resInstances.every((r) => r === response));
     });
 
     test("middleware should be able to run code before and after next()", () => {
         const pipeline = new Pipeline();
-        const request = makeRequest();
         const log = [];
 
-        const middleware = (req, next) => {
+        const middleware = (req, res, next) => {
             log.push("before");
-            const response = next();
+            const result = next();
             log.push("after");
-            return response;
+            return result;
         };
 
         pipeline
-            .send(request)
+            .send(makeRequest(), makeResponse())
             .through([middleware])
-            .then((req) => { log.push("destination"); return "result"; });
+            .then((req, res) => { log.push("destination"); return "result"; });
 
         assert.deepEqual(log, ["before", "destination", "after"]);
     });
 
     test("return value should propagate from destination through middleware to caller", () => {
         const pipeline = new Pipeline();
-        const request = makeRequest();
 
-        const m1 = (req, next) => {
-            const response = next();
-            return response;
-        };
+        const m1 = (req, res, next) => next();
+        const m2 = (req, res, next) => next();
 
-        const m2 = (req, next) => {
-            const response = next();
-            return response;
+        const result = pipeline
+            .send(makeRequest(), makeResponse())
+            .through([m1, m2])
+            .then((req, res) => "final-response");
+
+        assert.equal(result, "final-response");
+    });
+
+    test("middleware can short-circuit by not calling next()", () => {
+        const pipeline = new Pipeline();
+        let destinationCalled = false;
+
+        const blocker = (req, res, next) => {
+            return "blocked";
         };
 
         const result = pipeline
-            .send(request)
-            .through([m1, m2])
-            .then((req) => "final-response");
+            .send(makeRequest(), makeResponse())
+            .through([blocker])
+            .then((req, res) => { destinationCalled = true; });
 
-        assert.equal(result, "final-response");
+        assert.equal(result, "blocked");
+        assert.equal(destinationCalled, false);
     });
 
 });
@@ -221,18 +247,17 @@ describe("Pipeline - error propagation", () => {
 
     test("exceptions in middleware should bubble up (Pipeline does not catch)", () => {
         const pipeline = new Pipeline();
-        const request = makeRequest();
 
-        const explodingMiddleware = (req, next) => {
+        const explodingMiddleware = (req, res, next) => {
             throw new Error("middleware exploded");
         };
 
         assert.throws(
             () => {
                 pipeline
-                    .send(request)
+                    .send(makeRequest(), makeResponse())
                     .through([explodingMiddleware])
-                    .then((req) => "should-not-reach");
+                    .then((req, res) => "should-not-reach");
             },
             { message: "middleware exploded" }
         );
@@ -240,18 +265,15 @@ describe("Pipeline - error propagation", () => {
 
     test("exceptions in destination should bubble up through middleware", () => {
         const pipeline = new Pipeline();
-        const request = makeRequest();
 
-        const passThroughMiddleware = (req, next) => {
-            return next();
-        };
+        const passThroughMiddleware = (req, res, next) => next();
 
         assert.throws(
             () => {
                 pipeline
-                    .send(request)
+                    .send(makeRequest(), makeResponse())
                     .through([passThroughMiddleware])
-                    .then((req) => { throw new Error("destination exploded"); });
+                    .then((req, res) => { throw new Error("destination exploded"); });
             },
             { message: "destination exploded" }
         );
@@ -262,16 +284,15 @@ describe("Pipeline - error propagation", () => {
 describe("Pipeline - fluent API", () => {
 
     test("full fluent chain should work end-to-end", () => {
-        const request = makeRequest();
         const log = [];
 
-        const auth = (req, next) => { log.push("auth"); return next(); };
-        const logger = (req, next) => { log.push("logger"); return next(); };
+        const auth = (req, res, next) => { log.push("auth"); return next(); };
+        const logger = (req, res, next) => { log.push("logger"); return next(); };
 
         const result = new Pipeline()
-            .send(request)
+            .send(makeRequest(), makeResponse())
             .through([auth, logger])
-            .then((req) => {
+            .then((req, res) => {
                 log.push("handler");
                 return "response";
             });

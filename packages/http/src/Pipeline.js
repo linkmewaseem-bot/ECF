@@ -1,18 +1,22 @@
 import PipelineError from "./errors/PipelineError.js";
 import Request from "./Request.js";
+import Response from "./Response.js";
 
 export default class Pipeline {
     constructor() {
         this.request = null;
+        this.response = null;
         this.middlewares = [];
     }
 
     // ---- Public API ----
 
-    send(request) {
+    send(request, response) {
         this.validateRequest(request);
+        this.validateResponse(response);
 
         this.request = request;
+        this.response = response;
         return this;
     }
 
@@ -25,6 +29,7 @@ export default class Pipeline {
 
     then(destination) {
         this.validateDestination(destination);
+        this.assertReady();
 
         return this.execute(destination);
     }
@@ -40,8 +45,8 @@ export default class Pipeline {
         // Reduce right: wrap each middleware around the next one,
         // starting from the destination as the innermost function.
         return this.middlewares.reduceRight((next, middleware) => {
-            return () => middleware(this.request, next);
-        }, () => destination(this.request));
+            return () => middleware(this.request, this.response, next);
+        }, () => destination(this.request, this.response));
     }
 
     // ---- Validation ----
@@ -49,6 +54,12 @@ export default class Pipeline {
     validateRequest(request) {
         if (!request || !(request instanceof Request)) {
             throw new PipelineError("Pipeline requires a valid Request instance.");
+        }
+    }
+
+    validateResponse(response) {
+        if (!response || !(response instanceof Response)) {
+            throw new PipelineError("Pipeline requires a valid Response instance.");
         }
     }
 
@@ -67,6 +78,12 @@ export default class Pipeline {
     validateDestination(destination) {
         if (typeof destination !== "function") {
             throw new PipelineError("Pipeline requires a valid destination function.");
+        }
+    }
+
+    assertReady() {
+        if (!this.request || !this.response) {
+            throw new PipelineError("Pipeline requires send() to be called with request and response before then().");
         }
     }
 }

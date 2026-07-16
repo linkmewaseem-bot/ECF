@@ -1,4 +1,4 @@
-import ECFError from './ECFError.js';
+import {ECFError} from '@ecf/core';
 
 /**
  * Error thrown when a route-related error occurs.
