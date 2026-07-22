@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://github.com/YOUR-USERNAME/ECF/raw/main/banner.png" alt="ECF Banner" width="100%" style="border-radius:12px; margin-bottom:20px;">
+  <img src="https://github.com/linkmewaseem/ECF/raw/main/banner.png" alt="ECF Banner" width="100%" style="border-radius:12px; margin-bottom:20px;">
 </div>
 
 <br>
