@@ -33,6 +33,15 @@ export default class Response {
         return this;
     }
 
+    setHeader(name, value) {
+        return this.header(name, value);
+    }
+
+    getHeader(name) {
+        const trimmedName = this.normalizeHeaderName(name);
+        return this.raw.getHeader(trimmedName);
+    }
+
     hasHeader(name) {
         const trimmedName = this.normalizeHeaderName(name);
         return this.raw.getHeader(trimmedName) !== undefined;

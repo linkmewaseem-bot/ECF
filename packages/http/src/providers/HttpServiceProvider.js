@@ -2,27 +2,27 @@ import { ServiceProvider } from "@ecf/core";
 import Router from "../Router.js";
 import HttpKernel from "../HttpKernel.js";
 import HttpServer from "../HttpServer.js";
-import MiddlewareRegistry from "../MiddlewareRegistry.js";
-import MiddlewareResolver from "../MiddlewareResolver.js";
+import MiddlewareRegistry from "../middleware/MiddlewareRegistry.js";
+import MiddlewareResolver from "../middleware/MiddlewareResolver.js";
 
-// Temporary placeholder until BodyParserManager is built (Phase 2).
 const noopBodyParserManager = {
     parse: async () => ({})
 };
 
 export default class HttpServiceProvider extends ServiceProvider {
     register(app) {
-        app.singleton("router", () => {
-            return new Router();
-        });
-
         app.singleton("middleware.registry", () => {
             return new MiddlewareRegistry();
         });
 
+        app.singleton("router", () => {
+            return new Router();
+        });
+
         app.singleton("middleware.resolver", () => {
+            const router = app.make("router");
             const registry = app.make("middleware.registry");
-            return new MiddlewareResolver(registry);
+            return new MiddlewareResolver(router, registry);
         });
 
         app.singleton("http.kernel", () => {
@@ -38,6 +38,9 @@ export default class HttpServiceProvider extends ServiceProvider {
     }
 
     boot(app) {
-        // future: route file auto-loading, group prefixes, etc.
+        app.registerListenHandler((app, args) => {
+            const server = app.make("http.server");
+            server.listen(...args);
+        });
     }
 }

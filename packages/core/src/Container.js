@@ -7,7 +7,7 @@ export default class Container {
         this.bindings = new Map();
         this.instances = new Map();
         this.resolver = new Resolver();
-        this.resolving = new Set();  
+        this.resolving = new Set();
     }
 
     bind(name, factory) {
@@ -29,12 +29,12 @@ export default class Container {
 
     make(name) {
         this.validateName(name);
-        
+
         if (!this.bindings.has(name)) {
             throw new ContainerError(`Binding with name "${name}" does not exist.`);
         }
 
-        
+
         if (this.resolving.has(name)) {
             const chain = Array.from(this.resolving);
             chain.push(name);
@@ -45,26 +45,25 @@ export default class Container {
 
         const binding = this.bindings.get(name);
 
-       
+
+
         if (binding.singleton) {
             if (!this.instances.has(name)) {
-               
                 this.resolving.add(name);
                 try {
-                    const instance = binding.factory();
+                    const instance = this.resolver.resolve(binding, this);  // container ab pass hota hai
                     this.instances.set(name, instance);
                 } finally {
-                  
                     this.resolving.delete(name);
                 }
             }
             return this.instances.get(name);
         }
 
-       
+
         this.resolving.add(name);
         try {
-           
+
             return this.resolver.resolve(binding, this);
         } finally {
             this.resolving.delete(name);
@@ -83,7 +82,7 @@ export default class Container {
     flush() {
         this.bindings.clear();
         this.instances.clear();
-        this.resolving.clear();  
+        this.resolving.clear();
     }
 
     validateName(name) {

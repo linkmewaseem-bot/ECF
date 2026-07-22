@@ -1,31 +1,60 @@
-import { Application, Facade, HttpServiceProvider, Route } from "@ecf/http";
+import { Application, Facade, HttpServiceProvider, Route, Middleware } from "@ecf/http";
 
 const app = new Application();
+
 app.register(HttpServiceProvider);
 app.boot();
 Facade.setApplication(app);
 
+// ---- 1. Global Function Middleware ----
+const requestLogger = (req, res, next) => {
+    console.log(`[Global Logger] ${req.method} ${req.path}`);
+    return next();
+};
+app.use(requestLogger);
+
+// ---- 2. Global Class-Style Middleware ----
+class CustomHeaderMiddleware extends Middleware {
+    handle(req, res, next) {
+        res.header("X-Powered-By", "ECF Framework");
+        return next();
+    }
+}
+app.use(new CustomHeaderMiddleware());
+
+// ---- 3. Inline Middleware Functions ----
+const firstMiddleware = (req, res, next) => {
+    console.log("[Route Middleware] Executing firstMiddleware for this route");
+    return next();
+};
+
+const secondMiddleware = (req, res, next) => {
+    console.log("[Route Middleware] Executing secondMiddleware for this route");
+    return next();
+};
+
 const users = [
-    { id: 1, name: 'John', email: 'john@gmail.com' },
-    { id: 2, name: 'Jane', email: 'jane@gmail.com' },
-    { id: 3, name: 'Bob', email: 'bob@gmail.com' },
-    { id: 4, name: 'Alice', email: 'alice@gmail.com' },
-    { id: 5, name: 'Mike', email: 'mike@gmail.com' },
+    { id: 1, name: "John", email: "john@gmail.com" },
+    { id: 2, name: "Jane", email: "jane@gmail.com" },
+    { id: 3, name: "Bob", email: "bob@gmail.com" },
+    { id: 4, name: "Alice", email: "alice@gmail.com" },
+    { id: 5, name: "Mike", email: "mike@gmail.com" },
 ];
 
-// Static routes first
-Route.get("/", (req, res) => {
+// Option A: Array inline middleware: [firstMiddleware, secondMiddleware]
+Route.get("/", [firstMiddleware, secondMiddleware], (req, res) => {
     return res.html(`
         <h1>Welcome to the ECF world!</h1>
         <p>Let's explore the features and capabilities of ECF.</p>
     `);
 });
 
-Route.get('/about', (req, res) => {
-    res.text('Hi i am ECF i am new use me');
+Route.get("/about", (req, res) => {
+    return res.text("Hi i am ECF i am new use me");
 });
 
-Route.get('/users/new', (req, res) => {
+// Option B: Single inline middleware: firstMiddleware
+Route.get("/users/new", firstMiddleware, (req, res) => {
     return res.html(`
     <h1>New User</h1>
     <form action="/user" method="post">
@@ -40,51 +69,56 @@ Route.get('/users/new', (req, res) => {
     `);
 });
 
-Route.get('/users', (req, res) => {
+Route.get("/users", (req, res) => {
     return res.html(`
     <h1>Users</h1>
     <ul>
-    ${users.map((user) => {
-        return `
+    ${users
+            .map((user) => {
+                return `
             <li>
                 <a href="/users/${user.id}"><strong>${user.name}</strong></a>
                 <p>${user.email}</p>
             </li>
-        `
-    }).join('')}
+        `;
+            })
+            .join("")}
     </ul>
     <p><a href="/users/new">Add New User</a></p>
     `);
 });
 
 // Route for finding by name (case-insensitive) - MUST come before /users/{id}
-Route.get('/users/name/{name}', (req, res) => {
+Route.get("/users/name/{name}", (req, res) => {
     const searchName = req.params.name;
-    console.log('Searching for user by name:', searchName);
-    
+    console.log("Searching for user by name:", searchName);
+
     // Case-insensitive search
-    const user = users.find((user) => 
-        user.name.toLowerCase() === searchName.toLowerCase()
+    const user = users.find(
+        (user) => user.name.toLowerCase() === searchName.toLowerCase()
     );
-    
+
     if (!user) {
         // Show suggestions
-        const suggestions = users.filter((user) => 
+        const suggestions = users.filter((user) =>
             user.name.toLowerCase().includes(searchName.toLowerCase())
         );
-        
-        let suggestionHtml = '';
+
+        let suggestionHtml = "";
         if (suggestions.length > 0) {
             suggestionHtml = `
                 <h2>Did you mean?</h2>
                 <ul>
-                    ${suggestions.map(u => 
-                        `<li><a href="/users/name/${u.name}">${u.name}</a></li>`
-                    ).join('')}
+                    ${suggestions
+                    .map(
+                        (u) =>
+                            `<li><a href="/users/name/${u.name}">${u.name}</a></li>`
+                    )
+                    .join("")}
                 </ul>
             `;
         }
-        
+
         return res.html(`
         <h1>User not found</h1>
         <p>No user found with name: "${searchName}"</p>
@@ -92,7 +126,7 @@ Route.get('/users/name/{name}', (req, res) => {
         <p><a href="/users">View all users</a></p>
         `);
     }
-    
+
     return res.html(`
     <h1>User Profile</h1>
     <p><strong>Name:</strong> ${user.name}</p>
@@ -102,10 +136,10 @@ Route.get('/users/name/{name}', (req, res) => {
 });
 
 // Route for finding by ID - must come AFTER specific routes
-Route.get('/users/{id}', (req, res) => {
+Route.get("/users/{id}", (req, res) => {
     const id = parseInt(req.params.id);
-    console.log('Searching for user by ID:', id);
-    
+    console.log("Searching for user by ID:", id);
+
     const user = users.find((user) => user.id === id);
     if (!user) {
         return res.html(`
@@ -122,10 +156,12 @@ Route.get('/users/{id}', (req, res) => {
     `);
 });
 
-Route.post('/user', (req, res) => {
-    return res.json(req.body);
+Route.post("/user", (req, res) => {
+    const data = req.body();
+    console.log(data);
+    return res.json(data);
 });
 
 app.listen(3000, () => {
-    console.log("ECF running at http://localhost:3000");
+    console.log("ecf running at http://localhost:3000");
 });

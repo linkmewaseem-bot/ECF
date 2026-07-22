@@ -1,6 +1,7 @@
 import PipelineError from "./errors/PipelineError.js";
 import Request from "./Request.js";
 import Response from "./Response.js";
+import Middleware from "./Middleware.js";
 
 export default class Pipeline {
     constructor() {
@@ -22,7 +23,6 @@ export default class Pipeline {
 
     through(middlewares) {
         this.validateMiddlewares(middlewares);
-
         this.middlewares = [...middlewares];
         return this;
     }
@@ -30,7 +30,6 @@ export default class Pipeline {
     then(destination) {
         this.validateDestination(destination);
         this.assertReady();
-
         return this.execute(destination);
     }
 
@@ -42,11 +41,16 @@ export default class Pipeline {
     }
 
     buildChain(destination) {
-        // Reduce right: wrap each middleware around the next one,
-        // starting from the destination as the innermost function.
         return this.middlewares.reduceRight((next, middleware) => {
-            return () => middleware(this.request, this.response, next);
+            return () => this.invoke(middleware, next);
         }, () => destination(this.request, this.response));
+    }
+
+    invoke(middleware, next) {
+        if (middleware instanceof Middleware) {
+            return middleware.handle(this.request, this.response, next);
+        }
+        return middleware(this.request, this.response, next);
     }
 
     // ---- Validation ----
@@ -65,12 +69,16 @@ export default class Pipeline {
 
     validateMiddlewares(middlewares) {
         if (!Array.isArray(middlewares)) {
-            throw new PipelineError("Pipeline requires an array of middleware functions.");
+            throw new PipelineError("Pipeline requires an array of middleware.");
         }
 
         for (let i = 0; i < middlewares.length; i++) {
-            if (typeof middlewares[i] !== "function") {
-                throw new PipelineError(`Middleware at index ${i} must be a function.`);
+            const m = middlewares[i];
+            const isFunction = typeof m === "function";
+            const isMiddlewareInstance = m instanceof Middleware;
+
+            if (!isFunction && !isMiddlewareInstance) {
+                throw new PipelineError(`Middleware at index ${i} must be a function or a Middleware instance.`);
             }
         }
     }

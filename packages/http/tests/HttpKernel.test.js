@@ -6,8 +6,8 @@ import HttpKernelError from "../src/errors/HttpKernelError.js";
 import RouteNotFoundError from "../src/errors/RouteNotFoundError.js";
 import Request from "../src/Request.js";
 import Response from "../src/Response.js";
-import MiddlewareRegistry from "../src/MiddlewareRegistry.js";
-import MiddlewareResolver from "../src/MiddlewareResolver.js";
+import MiddlewareRegistry from "../src/middleware/MiddlewareRegistry.js";
+import MiddlewareResolver from "../src/middleware/MiddlewareResolver.js";
 
 // ---- Helpers ----
 
@@ -62,9 +62,13 @@ function makeFakeBodyParserManager(returnValue = {}) {
  */
 function makeFakeRouter() {
     const routes = [];
+    const metadata = new Map();
 
     return {
-        addRoute(method, path, handler) {
+        addRoute(method, path, ...args) {
+            const middleware = args.length > 1 ? (Array.isArray(args[0]) ? args[0] : [args[0]]) : [];
+            const handler = args[args.length - 1];
+
             const paramNames = [];
             const regexBody = path.split("/").filter(Boolean).map((seg) => {
                 const m = seg.match(/^\{([a-zA-Z_]\w*)\}$/);
@@ -77,6 +81,17 @@ function makeFakeRouter() {
             const regex = new RegExp(`^/${regexBody}$`);
 
             routes.push({ method: method.toUpperCase(), regex, paramNames, handler, path });
+
+            const key = `${method.toUpperCase()}:${path}`;
+            if (!metadata.has(key)) {
+                metadata.set(key, { middleware: [] });
+            }
+            metadata.get(key).middleware.push(...middleware);
+        },
+
+        getMetadata(method, path) {
+            const key = `${method.toUpperCase()}:${path}`;
+            return metadata.get(key) ?? { middleware: [] };
         },
 
         match(request) {
@@ -106,18 +121,33 @@ function makeFakeRouter() {
  * Creates a MiddlewareResolver, optionally pre-populated with a MiddlewareRegistry.
  * Pass { global: [...], route: [[method, path, fn], ...] } to seed it.
  */
-function makeMiddlewareResolver({ global = [], route = [] } = {}) {
+function makeMiddlewareResolver(routerOrOptions, optionsArg) {
+    let router;
+    let options;
+
+    if (routerOrOptions && typeof routerOrOptions.getMetadata === "function") {
+        router = routerOrOptions;
+        options = optionsArg ?? {};
+    } else {
+        options = routerOrOptions ?? {};
+        router = options.router ?? makeFakeRouter();
+    }
+
     const registry = new MiddlewareRegistry();
-    global.forEach((fn) => registry.global(fn));
-    route.forEach(([method, path, fn]) => registry.route(method, path, fn));
-    return new MiddlewareResolver(registry);
+    (options.global ?? []).forEach((fn) => registry.global(fn));
+    (options.route ?? []).forEach(([method, path, fn]) => {
+        router.addRoute(method, path, fn, () => {});
+    });
+    return new MiddlewareResolver(router, registry);
 }
 
 function makeKernel({ router, bodyParserManager, middlewareResolver } = {}) {
+    const r = router ?? makeFakeRouter();
+    const resolver = middlewareResolver ?? makeMiddlewareResolver(r);
     return new HttpKernel(
-        router ?? makeFakeRouter(),
+        r,
         bodyParserManager ?? makeFakeBodyParserManager(),
-        middlewareResolver ?? makeMiddlewareResolver()
+        resolver
     );
 }
 

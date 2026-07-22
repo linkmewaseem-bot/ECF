@@ -8,6 +8,7 @@ export default class Application {
     constructor() {
         this.container = new Container();
         this.providers = new Set();
+        this.listenHandler = null;
     }
 
     // ---- Container delegation ----
@@ -34,21 +35,46 @@ export default class Application {
     flush(...args) {
         return this.container.flush(...args);
     }
-    listen(...args) {
-        const server = this.make("http.server");
-        server.listen(...args);
-        return this;
-    }
     // ---- Provider handling ----
     register(ProviderClass) {
         this.validateProvider(ProviderClass);
 
         if (this.providers.has(ProviderClass)) {
-            return this; // already registered, skip
+            return this;
         }
 
         this.providers.add(ProviderClass);
         return this;
+    }
+    // Existing methods ke saath add karo
+
+    use(middleware) {
+        const registry = this.make("middleware.registry");
+        registry.global(middleware);
+        return this;
+    }
+    // ✅ NAYA
+    listen(...args) {
+        this.assertListenHandlerRegistered();
+        this.listenHandler(this, args);
+        return this;
+    }
+
+    registerListenHandler(handler) {
+        if (typeof handler !== "function") {
+            throw new ContainerError("Listen handler must be a function.");
+        }
+        this.listenHandler = handler;
+        return this;
+    }
+
+    assertListenHandlerRegistered() {
+        if (typeof this.listenHandler !== "function") {
+            throw new ContainerError(
+                'Application.listen() has no listen handler registered. ' +
+                'Register a provider (e.g. HttpServiceProvider from "@ecf/http") before calling listen().'
+            );
+        }
     }
 
     boot() {

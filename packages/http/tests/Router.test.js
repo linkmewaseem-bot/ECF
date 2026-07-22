@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { Readable } from "node:stream";
 import Router from "../src/Router.js";
 import RouteError from "../src/errors/RouteError.js";
+import RouterError from "../src/errors/RouterError.js";
 import DuplicateRouteError from "../src/errors/DuplicateRouteError.js";
 import RouteNotFoundError from "../src/errors/RouteNotFoundError.js";
 import Request from "../src/Request.js";
@@ -197,8 +198,6 @@ describe("Router - match()", () => {
     test("should prefer the first matching route when multiple could match", () => {
         const router = new Router();
         router.get("/users/{id}", () => "dynamic");
-        // Note: /users/me would need to be registered BEFORE /users/{id} to win,
-        // since Router matches in registration order.
 
         const routerOrdered = new Router();
         routerOrdered.get("/users/me", () => "static-me");
@@ -213,6 +212,50 @@ describe("Router - match()", () => {
 
         assert.throws(() => router.match(null), RouteError);
         assert.throws(() => router.match({}), RouteError);
+    });
+
+});
+
+describe("Router - metadata & inline middleware", () => {
+
+    test("should register a route with a single middleware function and store it in metadata", () => {
+        const router = new Router();
+        const mw = (req, res, next) => next();
+
+        router.get("/admin", mw, () => "handler");
+
+        assert.deepEqual(router.getMetadata("GET", "/admin").middleware, [mw]);
+    });
+
+    test("should register a route with an array of middleware and store it in metadata", () => {
+        const router = new Router();
+        const mw1 = (req, res, next) => next();
+        const mw2 = (req, res, next) => next();
+
+        router.get("/admin", [mw1, mw2], () => "handler");
+
+        assert.deepEqual(router.getMetadata("GET", "/admin").middleware, [mw1, mw2]);
+    });
+
+    test("should return default metadata for unregistered routes", () => {
+        const router = new Router();
+        assert.deepEqual(router.getMetadata("GET", "/missing"), { middleware: [] });
+    });
+
+    test("setMetadata() and getMetadata() should work with custom metadata fields", () => {
+        const router = new Router();
+        router.get("/admin", () => "handler");
+        router.setMetadata("GET", "/admin", { name: "admin.dashboard" });
+
+        assert.equal(router.getMetadata("GET", "/admin").name, "admin.dashboard");
+    });
+
+    test("should treat a single function argument as the handler, not middleware", () => {
+        const router = new Router();
+        const fn = (req, res, next) => next();
+
+        router.get("/admin", fn);
+        assert.deepEqual(router.getMetadata("GET", "/admin").middleware, []);
     });
 
 });

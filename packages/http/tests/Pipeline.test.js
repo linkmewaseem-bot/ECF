@@ -5,6 +5,8 @@ import Pipeline from "../src/Pipeline.js";
 import PipelineError from "../src/errors/PipelineError.js";
 import Request from "../src/Request.js";
 import Response from "../src/Response.js";
+import Middleware from "../src/Middleware.js";
+
 
 // ---- Helpers ----
 
@@ -299,6 +301,55 @@ describe("Pipeline - fluent API", () => {
 
         assert.deepEqual(log, ["auth", "logger", "handler"]);
         assert.equal(result, "response");
+    });
+
+});
+
+describe("Pipeline - class-based middleware", () => {
+
+    test("should execute a Middleware subclass instance via handle()", () => {
+        const pipeline = new Pipeline();
+        const log = [];
+
+        class Logger extends Middleware {
+            handle(request, response, next) {
+                log.push("logger-class");
+                return next();
+            }
+        }
+
+        pipeline
+            .send(makeRequest(), makeResponse())
+            .through([new Logger()])
+            .then((req, res) => { log.push("destination"); });
+
+        assert.deepEqual(log, ["logger-class", "destination"]);
+    });
+
+    test("should support mixing function and class-based middleware in the same chain", () => {
+        const pipeline = new Pipeline();
+        const log = [];
+
+        const fnMiddleware = (req, res, next) => { log.push("fn"); return next(); };
+
+        class ClassMiddleware extends Middleware {
+            handle(request, response, next) {
+                log.push("class");
+                return next();
+            }
+        }
+
+        pipeline
+            .send(makeRequest(), makeResponse())
+            .through([fnMiddleware, new ClassMiddleware()])
+            .then((req, res) => { log.push("destination"); });
+
+        assert.deepEqual(log, ["fn", "class", "destination"]);
+    });
+
+    test("through() should throw PipelineError if array contains neither function nor Middleware instance", () => {
+        const pipeline = new Pipeline();
+        assert.throws(() => pipeline.through([{}]), PipelineError);
     });
 
 });

@@ -1,4 +1,5 @@
 import RouteError from "./errors/RouteError.js";
+import RouterError from "./errors/RouterError.js";
 import DuplicateRouteError from "./errors/DuplicateRouteError.js";
 import RouteNotFoundError from "./errors/RouteNotFoundError.js";
 import Route from "./Route.js";
@@ -7,43 +8,71 @@ const VALID_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS
 
 export default class Router {
     constructor() {
-        this.routes = new Map(); // Map<Method, Route[]>
+        this.routes = new Map();
+        this.metadata = new Map();
+    }
+
+    // ---- Helper Methods ----
+
+    makeRouteKey(method, path) {
+        return `${method.toUpperCase()}:${path}`;
+    }
+
+    setMetadata(method, path, metadata) {
+        const key = this.makeRouteKey(method, path);
+
+        if (!this.metadata.has(key)) {
+            this.metadata.set(key, {
+                middleware: []
+            });
+        }
+
+        Object.assign(this.metadata.get(key), metadata);
+    }
+
+    getMetadata(method, path) {
+        const key = this.makeRouteKey(method, path);
+
+        return this.metadata.get(key) ?? {
+            middleware: []
+        };
     }
 
     // ---- Public API ----
 
-    get(path, handler) {
-        return this.addRoute("GET", path, handler);
+    get(path, ...args) {
+        return this.addRoute("GET", path, ...args);
     }
 
-    post(path, handler) {
-        return this.addRoute("POST", path, handler);
+    post(path, ...args) {
+        return this.addRoute("POST", path, ...args);
     }
 
-    put(path, handler) {
-        return this.addRoute("PUT", path, handler);
+    put(path, ...args) {
+        return this.addRoute("PUT", path, ...args);
     }
 
-    patch(path, handler) {
-        return this.addRoute("PATCH", path, handler);
+    patch(path, ...args) {
+        return this.addRoute("PATCH", path, ...args);
     }
 
-    delete(path, handler) {
-        return this.addRoute("DELETE", path, handler);
+    delete(path, ...args) {
+        return this.addRoute("DELETE", path, ...args);
     }
 
-    head(path, handler) {
-        return this.addRoute("HEAD", path, handler);
+    head(path, ...args) {
+        return this.addRoute("HEAD", path, ...args);
     }
 
-    options(path, handler) {
-        return this.addRoute("OPTIONS", path, handler);
+    options(path, ...args) {
+        return this.addRoute("OPTIONS", path, ...args);
     }
 
-    any(path, handler) {
+    any(path, ...args) {
         for (const method of VALID_METHODS) {
-            this.addRoute(method, path, handler);
+            this.addRoute(method, path, ...args);
         }
+
         return this;
     }
 
@@ -67,10 +96,13 @@ export default class Router {
         return route.route;
     }
 
-    // ---- Registration engine (single source of truth) ----
+    // ---- Registration engine ----
 
-    addRoute(method, path, handler) {
+    addRoute(method, path, ...args) {
+        const { middleware, handler } = this.normalizeArgs(args);
+
         const route = new Route(method, path, handler);
+
         this.assertNotDuplicate(route);
 
         if (!this.routes.has(route.method)) {
@@ -78,7 +110,30 @@ export default class Router {
         }
 
         this.routes.get(route.method).push(route);
+
+        this.setMetadata(method, path, {
+            middleware
+        });
+
         return this;
+    }
+
+    normalizeArgs(args) {
+        if (args.length === 1) {
+            return {
+                middleware: [],
+                handler: args[0]
+            };
+        }
+
+        const [middlewareArg, handler] = args;
+
+        return {
+            middleware: Array.isArray(middlewareArg)
+                ? middlewareArg
+                : [middlewareArg],
+            handler
+        };
     }
 
     // ---- Internal helpers ----

@@ -1,7 +1,7 @@
 import { describe, test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { Readable } from "node:stream";
-import {Application, Facade} from "@ecf/core";
+import { Application, Facade } from "@ecf/core";
 import HttpServiceProvider from "../src/providers/HttpServiceProvider.js";
 import Route from "../src/facades/Route.js";
 import Request from "../src/Request.js";
@@ -34,8 +34,10 @@ function makeRequest({ method = "GET", url = "/" } = {}) {
 
 describe("Route Facade - full integration", () => {
 
+    let app; // shared across all tests in this describe block
+
     beforeEach(() => {
-        const app = new Application();
+        app = new Application();
         app.register(HttpServiceProvider);
         app.boot();
         Facade.setApplication(app);
@@ -46,6 +48,34 @@ describe("Route Facade - full integration", () => {
 
         const route = Route.match(makeRequest({ method: "GET", url: "/users" }));
         assert.equal(route.handler(), "user-list");
+    });
+
+    test("inline middleware via Route.get(path, middleware, handler) should run before handler on a real request", () => {
+        const log = [];
+        const mid = (req, res, next) => { log.push("mid"); return next(); };
+
+        Route.get("/protected", mid, (req, res) => {
+            log.push("handler");
+            return res.text("ok");
+        });
+
+        const resolver = app.make("middleware.resolver");
+        const middleware = resolver.resolve({ method: "GET", path: "/protected" });
+
+        assert.equal(middleware.length, 1);
+        assert.strictEqual(middleware[0], mid);
+    });
+
+    test("inline middleware array via Route.get(path, [mw1, mw2], handler) should register both", () => {
+        const mw1 = (req, res, next) => next();
+        const mw2 = (req, res, next) => next();
+
+        Route.get("/multi", [mw1, mw2], (req, res) => res.text("ok"));
+
+        const resolver = app.make("middleware.resolver");
+        const middleware = resolver.resolve({ method: "GET", path: "/multi" });
+
+        assert.deepEqual(middleware, [mw1, mw2]);
     });
 
     test("Route.post() should register a route through the facade", () => {

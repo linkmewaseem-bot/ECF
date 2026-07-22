@@ -9,11 +9,11 @@ export { default as Route } from "./facades/Route.js";
 
 export { default as Router } from "./Router.js";
 export { default as Pipeline } from "./Pipeline.js";
-
+export { default as Middleware } from "./Middleware.js";
 export { default as HttpKernel } from "./HttpKernel.js";
 export { default as HttpServer } from "./HttpServer.js";
 export { default as HttpServiceProvider } from "./providers/HttpServiceProvider.js";
-export { default as MiddlewareRegistry } from "./MiddlewareRegistry.js";
+export { default as MiddlewareRegistry } from "./middleware/MiddlewareRegistry.js";
 
 // Errors
 
