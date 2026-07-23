@@ -1,4 +1,4 @@
-export { Application, Container, ServiceProvider, Facade, ConfigManager, ConfigError, ContainerError, ECFError } from "@ecf/core";
+export { Application, Container, ServiceProvider, Facade, LoggerServiceProvider, CoreServiceProvider, ConfigManager, ConfigError, ContainerError, ECFError, ExceptionManager, Log } from "@ecf/core";
 
 // HTTP
 
@@ -13,6 +13,7 @@ export { default as Middleware } from "./Middleware.js";
 export { default as HttpKernel } from "./HttpKernel.js";
 export { default as HttpServer } from "./HttpServer.js";
 export { default as HttpServiceProvider } from "./providers/HttpServiceProvider.js";
+export { default as HttpExceptionHandler } from "./HttpExceptionHandler.js";
 export { default as MiddlewareRegistry } from "./middleware/MiddlewareRegistry.js";
 
 // Errors
@@ -25,3 +26,5 @@ export { default as PipelineError } from "./errors/PipelineError.js";
 export { default as HttpKernelError } from "./errors/HttpKernelError.js";
 export { default as HttpServerError } from "./errors/HttpServerError.js";
 export { default as MiddlewareRegistryError } from "./errors/MiddlewareRegistryError.js";
+export { default as HttpExceptionHandlerError } from "./errors/HttpExceptionHandlerError.js";
+export { default as RouteNotFoundError } from "./errors/RouteNotFoundError.js";

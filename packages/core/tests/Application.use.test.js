@@ -3,13 +3,14 @@ import assert from "node:assert/strict";
 import Application from "../src/Application.js";
 import Facade from "../src/Facade.js";
 // ✅ Ye likho
-import { HttpServiceProvider, Route } from "@ecf/http";
+import { HttpServiceProvider, CoreServiceProvider, Route } from "@ecf/http";
 import http from "node:http";
 
 let app;
 
 function bootApp() {
     app = new Application();
+    app.register(CoreServiceProvider);
     app.register(HttpServiceProvider);
     app.boot();
     Facade.setApplication(app);

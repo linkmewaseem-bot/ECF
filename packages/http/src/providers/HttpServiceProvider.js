@@ -4,6 +4,8 @@ import HttpKernel from "../HttpKernel.js";
 import HttpServer from "../HttpServer.js";
 import MiddlewareRegistry from "../middleware/MiddlewareRegistry.js";
 import MiddlewareResolver from "../middleware/MiddlewareResolver.js";
+import HttpExceptionHandler from "../HttpExceptionHandler.js";
+import RouteNotFoundError from "../errors/RouteNotFoundError.js";
 
 const noopBodyParserManager = {
     parse: async () => ({})
@@ -25,10 +27,16 @@ export default class HttpServiceProvider extends ServiceProvider {
             return new MiddlewareResolver(router, registry);
         });
 
+        app.singleton("exception.handler", () => {
+            const manager = app.make("exception.manager");
+            return new HttpExceptionHandler(manager);
+        });
+
         app.singleton("http.kernel", () => {
             const router = app.make("router");
             const resolver = app.make("middleware.resolver");
-            return new HttpKernel(router, noopBodyParserManager, resolver);
+            const exceptionHandler = app.make("exception.handler");
+            return new HttpKernel(router, noopBodyParserManager, resolver, exceptionHandler);
         });
 
         app.singleton("http.server", () => {
@@ -38,6 +46,12 @@ export default class HttpServiceProvider extends ServiceProvider {
     }
 
     boot(app) {
+        const exceptionManager = app.make("exception.manager");
+
+        exceptionManager.render(RouteNotFoundError, (err, req, res) => {
+            return res.status(404).text("Not Found");
+        });
+
         app.registerListenHandler((app, args) => {
             const server = app.make("http.server");
             server.listen(...args);

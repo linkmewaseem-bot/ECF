@@ -1,8 +1,9 @@
 import { describe, test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { Readable } from "node:stream";
-import { Application, Facade } from "@ecf/core";
+import { Application, Facade, CoreServiceProvider } from "@ecf/core";
 import HttpServiceProvider from "../src/providers/HttpServiceProvider.js";
+import RouteNotFoundError from "../src/errors/RouteNotFoundError.js";
 import Route from "../src/facades/Route.js";
 import Request from "../src/Request.js";
 
@@ -38,6 +39,7 @@ describe("Route Facade - full integration", () => {
 
     beforeEach(() => {
         app = new Application();
+        app.register(CoreServiceProvider);
         app.register(HttpServiceProvider);
         app.boot();
         Facade.setApplication(app);
@@ -107,6 +109,12 @@ describe("Route Facade - full integration", () => {
         assert.throws(() => {
             Route.get("/duplicate", () => {});
         });
+    });
+
+    test("HttpServiceProvider boot() should register RouteNotFoundError → 404 mapping", () => {
+        const manager = app.make("exception.manager");
+        const renderer = manager.resolveRenderer(new RouteNotFoundError("GET", "/x"));
+        assert.ok(typeof renderer === "function");
     });
 
 });

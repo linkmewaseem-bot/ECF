@@ -1,18 +1,42 @@
-import { Application, Facade, HttpServiceProvider, Route, Middleware } from "@ecf/http";
+import { Application, Facade, CoreServiceProvider,RouteNotFoundError, LoggerServiceProvider, HttpServiceProvider, Route, Middleware, Log, ExceptionManager } from "@ecf/http";
 
 const app = new Application();
 
+app.register(CoreServiceProvider);
 app.register(HttpServiceProvider);
+app.register(LoggerServiceProvider);
 app.boot();
+
 Facade.setApplication(app);
+
+// ---- Exception Handling Setup ----
+class ValidationError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = "ValidationError";
+    }
+}
+
+const exceptionManager = app.make("exception.manager");
+
+// Custom renderer: ValidationError → 422 JSON response
+exceptionManager.render(ValidationError, (err, req, res) => {
+    return res.status(422).json({ error: err.message, type: "ValidationError" });
+});
+
+// Custom reporter: log every error to console
+exceptionManager.report(Error, (err) => {
+    Log.error(`[ExceptionReporter] ${err.name}: ${err.message}`);
+});
 
 // ---- 1. Global Function Middleware ----
 const requestLogger = (req, res, next) => {
-    console.log(`[Global Logger] ${req.method} ${req.path}`);
+    // console.log(`[Global Logger] ${req.method} ${req.path}`);
+    Log.info(`[Global Logger] ${req.method} ${req.path}`)
     return next();
 };
 app.use(requestLogger);
-
+Log.info("Server runing")
 // ---- 2. Global Class-Style Middleware ----
 class CustomHeaderMiddleware extends Middleware {
     handle(req, res, next) {
@@ -68,6 +92,7 @@ Route.get("/users/new", firstMiddleware, (req, res) => {
     </form>
     `);
 });
+
 
 Route.get("/users", (req, res) => {
     return res.html(`
@@ -162,6 +187,29 @@ Route.post("/user", (req, res) => {
     return res.json(data);
 });
 
+// ---- Exception Test Routes ----
+
+// Test 1: Custom error → ValidationError → 422 JSON response
+Route.get("/error", (req, res) => {
+    throw new ValidationError("Name field is required");
+});
+
+// Test 2: Unknown error → fallback → 500 "Internal Server Error"
+Route.get("/crash", (req, res) => {
+    throw new Error("Something unexpected happened!");
+});
+
+
+
+exceptionManager.render(RouteNotFoundError, (err, req, res) => {
+    return res.status(404).html(`
+        <h1>404 - Page Not Found</h1>
+        <p>${err.message}</p>
+        <a href="/">Go Home</a>
+    `);
+});
+
 app.listen(3000, () => {
-    console.log("ecf running at http://localhost:3000");
+    // console.log("ecf running at http://localhost:3000");
+    Log.log("Server", "stating on Port 3000", "http://localhost:3000")
 });

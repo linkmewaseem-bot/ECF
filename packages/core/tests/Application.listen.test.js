@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import Application from "../src/Application.js";
 import Facade from "../src/Facade.js";
-import {HttpServiceProvider, Route, HttpServerError } from "@ecf/http";
+import {HttpServiceProvider, CoreServiceProvider, Route, HttpServerError } from "@ecf/http";
 
 
 let app;
@@ -11,6 +11,7 @@ let server;
 
 function bootApp() {
     app = new Application();
+    app.register(CoreServiceProvider);
     app.register(HttpServiceProvider);
     app.boot();
     Facade.setApplication(app);

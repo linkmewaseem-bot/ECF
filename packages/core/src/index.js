@@ -11,6 +11,7 @@ export { default as ConfigError } from "./errors/ConfigError.js";
 export { default as LoggerError } from "./errors/LoggerError.js";
 export { default as EventError } from "./errors/EventError.js";
 export { default as EnvError } from "./errors/EnvError.js";
+export { default as ExceptionManagerError } from "./errors/ExceptionManagerError.js";
 
 // ---- Config ----
 export { default as ConfigManager } from "./ConfigManager.js";
@@ -34,6 +35,10 @@ export { default as EnvManager } from "./env/EnvManager.js";
 export { default as DotEnvLoader } from "./env/DotEnvLoader.js";
 export { default as EnvironmentServiceProvider } from "./providers/EnvironmentServiceProvider.js";
 export { default as Env } from "./facade/Env.js";
+
+// ---- Exception Handling ----
+export { default as ExceptionManager } from "./ExceptionManager.js";
+export { default as CoreServiceProvider } from "./providers/CoreServiceProvider.js";
 
 // ---- Database ----
 export { default as DatabaseServiceProvider } from "./providers/DatabaseServiceProvider.js";

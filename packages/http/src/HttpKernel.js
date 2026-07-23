@@ -4,7 +4,7 @@ import Response from "./Response.js";
 import Pipeline from "./Pipeline.js";
 
 export default class HttpKernel {
-    constructor(router, bodyParserManager, middlewareResolver) {
+    constructor(router, bodyParserManager, middlewareResolver, exceptionHandler) {
         this.validateRouter(router);
         this.validateBodyParserManager(bodyParserManager);
         this.validateMiddlewareResolver(middlewareResolver);
@@ -12,6 +12,7 @@ export default class HttpKernel {
         this.router = router;
         this.bodyParserManager = bodyParserManager;
         this.middlewareResolver = middlewareResolver;
+        this.exceptionHandler = exceptionHandler || null;
     }
 
     // ---- Public API ----
@@ -19,15 +20,22 @@ export default class HttpKernel {
     handle(rawRequest, rawResponse) {
         const request = new Request(rawRequest, this.bodyParserManager);
         const response = new Response(rawResponse);
-        const pipeline = new Pipeline();
 
-        const route = this.router.match(request);
-        const middleware = this.middlewareResolver.resolve(route);
+        try {
+            const route = this.router.match(request);
+            const middleware = this.middlewareResolver.resolve(route);
+            const pipeline = new Pipeline();
 
-        return pipeline
-            .send(request, response)
-            .through(middleware)
-            .then((req, res) => route.handler(req, res));
+            return pipeline
+                .send(request, response)
+                .through(middleware)
+                .then((req, res) => route.handler(req, res));
+        } catch (error) {
+            if (this.exceptionHandler) {
+                return this.exceptionHandler.handle(error, request, response);
+            }
+            throw error;
+        }
     }
 
     // ---- Validation ----
